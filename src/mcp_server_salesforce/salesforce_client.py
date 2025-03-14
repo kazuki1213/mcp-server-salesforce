@@ -4,9 +4,20 @@ Salesforce client module for interacting with Salesforce REST API.
 import os
 import json
 import functools
+import logging
 from typing import Dict, List, Any, Optional, Union, Callable, TypeVar, cast
+
 from simple_salesforce import Salesforce
 from dotenv import load_dotenv
+
+from .constants import (
+    ENV_SF_USERNAME, 
+    ENV_SF_PASSWORD, 
+    ENV_SF_TOKEN,
+    ENV_SF_DOMAIN,
+    DEFAULT_SF_DOMAIN
+)
+from .utils import logger
 
 # Custom exception types for better error handling
 class SalesforceError(Exception):
@@ -43,11 +54,14 @@ def salesforce_error_handler(operation_name: str) -> Callable[[Callable[..., R]]
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> R:
             try:
+                logger.debug(f"Executing Salesforce operation: {operation_name}")
                 return func(*args, **kwargs)
             except SalesforceError:
                 # Re-raise existing SalesforceError exceptions
+                logger.error(f"Salesforce operation failed: {operation_name}")
                 raise
             except Exception as e:
+                logger.error(f"Error in Salesforce operation {operation_name}: {str(e)}")
                 # Map raw exceptions to appropriate SalesforceError types
                 if 'authentication' in str(e).lower() or 'login' in str(e).lower():
                     raise SalesforceAuthError(f"Authentication error during {operation_name}: {str(e)}")
@@ -69,21 +83,37 @@ class SalesforceClient:
         Initialize Salesforce client with credentials.
         If credentials not provided, will attempt to load from environment variables.
         
+        Args:
+            username: Salesforce username
+            password: Salesforce password
+            security_token: Salesforce security token
+            domain: Salesforce domain (default: 'login')
+            
         Raises:
             SalesforceAuthError: If credentials are missing or authentication fails
         """
         load_dotenv()  # Load environment variables from .env file if exists
         
-        self.username = username or os.getenv('SALESFORCE_USERNAME')
-        self.password = password or os.getenv('SALESFORCE_PASSWORD')
-        self.security_token = security_token or os.getenv('SALESFORCE_SECURITY_TOKEN')
-        self.domain = domain or os.getenv('SALESFORCE_DOMAIN', 'login')
+        self.username = username or os.getenv(ENV_SF_USERNAME)
+        self.password = password or os.getenv(ENV_SF_PASSWORD)
+        self.security_token = security_token or os.getenv(ENV_SF_TOKEN)
+        self.domain = domain or os.getenv(ENV_SF_DOMAIN, DEFAULT_SF_DOMAIN)
+        
+        logger.info(f"Initializing Salesforce client for user: {self.username}")
         
         if not all([self.username, self.password, self.security_token]):
+            logger.error("Missing required Salesforce credentials")
+            missing = []
+            if not self.username:
+                missing.append(ENV_SF_USERNAME)
+            if not self.password:
+                missing.append(ENV_SF_PASSWORD)
+            if not self.security_token:
+                missing.append(ENV_SF_TOKEN)
+                
             raise SalesforceAuthError(
-                "Missing required Salesforce credentials. "
-                "Provide credentials directly or set environment variables: "
-                "SALESFORCE_USERNAME, SALESFORCE_PASSWORD, SALESFORCE_SECURITY_TOKEN"
+                f"Missing required Salesforce credentials: {', '.join(missing)}. "
+                "Provide credentials directly or set environment variables."
             )
         
         try:
@@ -93,7 +123,9 @@ class SalesforceClient:
                 security_token=self.security_token,
                 domain=self.domain
             )
+            logger.info("Salesforce authentication successful")
         except Exception as e:
+            logger.error(f"Salesforce authentication failed: {str(e)}")
             raise SalesforceAuthError(f"Failed to authenticate with Salesforce: {str(e)}")
     
     def _get_sobject(self, object_name: str) -> Any:
@@ -112,6 +144,7 @@ class SalesforceClient:
         try:
             return getattr(self.client, object_name)
         except AttributeError:
+            logger.error(f"Salesforce object not found: {object_name}")
             raise SalesforceError(f"Salesforce object '{object_name}' not found")
     
     @salesforce_error_handler("SOQL query")
@@ -128,7 +161,10 @@ class SalesforceClient:
         Raises:
             SalesforceQueryError: If query execution fails
         """
+        logger.debug(f"Executing SOQL query: {soql_query}")
         results = self.client.query(soql_query)
+        record_count = len(results.get('records', []))
+        logger.debug(f"Query returned {record_count} records")
         return results.get('records', [])
     
     @salesforce_error_handler("record creation")
@@ -146,14 +182,18 @@ class SalesforceClient:
         Raises:
             SalesforceDataError: If record creation fails
         """
+        logger.debug(f"Creating {object_name} record: {data}")
         sf_object = self._get_sobject(object_name)
         result = sf_object.create(data)
         
         if result.get('success'):
-            return cast(str, result.get('id'))
+            record_id = cast(str, result.get('id'))
+            logger.info(f"Created {object_name} record with ID: {record_id}")
+            return record_id
         else:
             errors = result.get('errors', [])
             error_msg = '; '.join([str(err) for err in errors]) if errors else 'Unknown error'
+            logger.error(f"Failed to create {object_name}: {error_msg}")
             raise SalesforceDataError(f"Failed to create {object_name}: {error_msg}")
     
     @salesforce_error_handler("record update")
@@ -169,8 +209,10 @@ class SalesforceClient:
         Raises:
             SalesforceDataError: If record update fails
         """
+        logger.debug(f"Updating {object_name} record {record_id}: {data}")
         sf_object = self._get_sobject(object_name)
         sf_object.update(record_id, data)
+        logger.info(f"Updated {object_name} record with ID: {record_id}")
     
     @salesforce_error_handler("record deletion")
     def delete_record(self, object_name: str, record_id: str) -> None:
@@ -184,8 +226,10 @@ class SalesforceClient:
         Raises:
             SalesforceDataError: If record deletion fails
         """
+        logger.debug(f"Deleting {object_name} record {record_id}")
         sf_object = self._get_sobject(object_name)
         sf_object.delete(record_id)
+        logger.info(f"Deleted {object_name} record with ID: {record_id}")
     
     def get_record_with_fields(self, object_name: str, record_id: str, fields: List[str]) -> Dict[str, Any]:
         """
@@ -204,10 +248,14 @@ class SalesforceClient:
         """
         field_str = ', '.join(fields)
         query = f"SELECT {field_str} FROM {object_name} WHERE Id = '{record_id}'"
+        logger.debug(f"Getting record with fields query: {query}")
         results = self.query(query)
         
         if results:
+            logger.debug(f"Found record with ID: {record_id}")
             return results[0]
+        
+        logger.debug(f"No record found with ID: {record_id}")
         return {}
     
     @salesforce_error_handler("record retrieval")
@@ -226,11 +274,14 @@ class SalesforceClient:
         Raises:
             SalesforceDataError: If record retrieval fails
         """
+        logger.debug(f"Getting {object_name} record {record_id}")
         if fields:
             return self.get_record_with_fields(object_name, record_id, fields)
         
         sf_object = self._get_sobject(object_name)
-        return sf_object.get(record_id)
+        record = sf_object.get(record_id)
+        logger.debug(f"Retrieved {object_name} record with ID: {record_id}")
+        return record
     
     @salesforce_error_handler("object listing")
     def get_available_objects(self) -> List[str]:
@@ -243,8 +294,11 @@ class SalesforceClient:
         Raises:
             SalesforceError: If object listing fails
         """
+        logger.debug("Getting available Salesforce objects")
         describe = self.client.describe()
-        return [obj['name'] for obj in describe.get('sobjects', [])]
+        obj_names = [obj['name'] for obj in describe.get('sobjects', [])]
+        logger.debug(f"Found {len(obj_names)} Salesforce objects")
+        return obj_names
     
     @salesforce_error_handler("object description")
     def describe_object(self, object_name: str) -> Dict[str, Any]:
@@ -260,5 +314,8 @@ class SalesforceClient:
         Raises:
             SalesforceError: If object description fails
         """
+        logger.debug(f"Describing Salesforce object: {object_name}")
         sf_object = self._get_sobject(object_name)
-        return sf_object.describe()
+        metadata = sf_object.describe()
+        logger.debug(f"Retrieved metadata for {object_name}")
+        return metadata
