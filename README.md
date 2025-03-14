@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/kazuki1213/mcp-server-salesforce/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![Python Version](https://img.shields.io/badge/python-3.13-blue.svg)
+![Python Version](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)
 
 A Model Context Protocol server implementation for interacting with Salesforce
 
