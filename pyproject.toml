@@ -3,7 +3,7 @@ name = "mcp-server-salesforce"
 version = "0.0.1"
 description = "A Model Context Protocol server implementation for interacting with Salesforce"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 authors = [
     {name = "kznkzn", email = "kznkzn@example.com"},
 ]
@@ -11,8 +11,7 @@ license = {text = "MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.10",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Intended Audience :: Developers",
@@ -52,7 +51,7 @@ python_files = "test_*.py"
 asyncio_mode = "auto"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -69,5 +68,5 @@ disallow_incomplete_defs = false
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py310"
 select = ["E", "F", "I", "B"]
