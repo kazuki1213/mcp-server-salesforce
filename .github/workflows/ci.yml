@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install uv
+        uv pip install -e ".[test]"
+    
+    - name: Run tests
+      run: |
+        python -m pytest
+    
+    - name: Type check with mypy
+      run: |
+        uv pip install mypy
+        python -m mypy src/
+      continue-on-error: true  # Optional, remove if you want type errors to fail the build
+    
+    - name: Lint with ruff
+      run: |
+        uv pip install ruff
+        ruff check .
+      continue-on-error: true  # Optional, remove if you want lint errors to fail the build

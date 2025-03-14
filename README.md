@@ -1,5 +1,9 @@
 # mcp-server-salesforce MCP server
 
+![CI](https://github.com/kazuki1213/mcp-server-salesforce/actions/workflows/ci.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![Python Version](https://img.shields.io/badge/python-3.13-blue.svg)
+
 A Model Context Protocol server implementation for interacting with Salesforce
 
 ## Components
@@ -110,7 +114,23 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 ### Building and Publishing
 
-To prepare the package for distribution:
+The project uses GitHub Actions for CI/CD:
+
+- **CI Pipeline**: Automatically runs tests, type checking, and linting on every push and pull request
+- **CD Pipeline**: Automatically builds and publishes to PyPI when a new version tag is pushed
+
+To prepare a release:
+
+1. Update the version in `pyproject.toml`
+2. Create and push a tag: 
+```bash
+git tag v0.0.x
+git push origin v0.0.x
+```
+
+This will trigger the automatic release process.
+
+For manual builds:
 
 1. Sync dependencies and update lockfile:
 ```bash
